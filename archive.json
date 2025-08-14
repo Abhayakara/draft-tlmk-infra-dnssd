@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2025-08-12T01:09:03.255679+00:00",
+  "timestamp": "2025-08-14T01:11:01.409142+00:00",
   "repo": "Abhayakara/draft-tlmk-infra-dnssd",
   "labels": [
     {
@@ -49,6 +49,23 @@
       "color": "ffffff"
     }
   ],
-  "issues": [],
+  "issues": [
+    {
+      "number": 1,
+      "id": "I_kwDOPJrgdM7F0abr",
+      "title": "Potential conflicts between SRP service key-values and interface-specific domains",
+      "url": "https://github.com/Abhayakara/draft-tlmk-infra-dnssd/issues/1",
+      "state": "OPEN",
+      "author": "francoismichel",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "This is not a big problem, but:\n\n> A DNSSD service may support link-specific discovery proxy service. In such cases, each IP link must have its\nown unique domain, which is specific to the individual DNSSD service. Each such domain must have an\nname=value entry in the TXT record. This entry has as its name a domain name. Its value is a comma-\nseparated list of IP prefixes that are on-link for the IP link identified by the domain.\n\nIf I understand correctly, there is a possibility of conflicts between an interface-specific domain and a TXT entry (or potentially injection that could override some entries that were omitted in the TXT record?). While unlikely to occur right now now, these conflicts may appear later.  If users are able to configure their domains on their router, they may give domain names that could conflict with future TXT entries that we could define for this service (e.g. \"http=...\" if we consider DoH one day, or \"ipv6\", \"infrastructure\", ...). \n\nWhy not defining link-specific domains by doing something like:\n\n> ls-domains='link-specific-domains'\n\nwhere `'link-specific-domains` would be a list of key=value pairs ?\n\nIf the 255 characters limitation of TXT record strings is an issue, we could do `ls-domains-1=...`,`ls-domains-2=...`, and so on.\nThere may be other more clever ways to avoid such conflicts.\n\nAgain, right now conflicts are unlikely to occur, so it is not a big thing, but they seem pretty easy to avoid too.\n\nWhat are your thoughts ?",
+      "createdAt": "2025-08-13T15:11:58Z",
+      "updatedAt": "2025-08-13T15:11:58Z",
+      "closedAt": null,
+      "comments": []
+    }
+  ],
   "pulls": []
 }
