@@ -212,7 +212,7 @@ TODO Security
 
 # IANA Considerations
 
-ALlocate <service-name>, "_dnssd-server" is preferred
+Allocate <service-name>, "_dnssd-server" is preferred
 
 --- back
 
