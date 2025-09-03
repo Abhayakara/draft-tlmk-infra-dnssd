@@ -64,7 +64,7 @@ In addition, the service must be advertised so that devices that would like to m
 This specification relies on existing technology and makes reference to that technology assuming that the reader is already familiar with it. Readers should familiarize themselves with at least the following documents.
 
 - The DNS specification {{!RFC1035}} which discusses DNS zones
-- The SRP specificaiton {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
+- The SRP specification {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
 - The Advertising Proxy specification {{!draft-ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
 - The Discovery Proxy specification {{!RFC8766}} which describes how to discover mDNS services on a link using DNS queries
 - The DNS Push Specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
