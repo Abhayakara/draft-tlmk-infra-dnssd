@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2025-09-02T01:04:50.411695+00:00",
+  "timestamp": "2025-09-04T01:00:45.851673+00:00",
   "repo": "Abhayakara/draft-tlmk-infra-dnssd",
   "labels": [
     {
@@ -67,5 +67,32 @@
       "comments": []
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 2,
+      "id": "PR_kwDOPJrgdM6muI-h",
+      "title": "Add specification on monitoring service availability once the initial registration is completed",
+      "url": "https://github.com/Abhayakara/draft-tlmk-infra-dnssd/pull/2",
+      "state": "OPEN",
+      "author": "mkardous-silabs",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "### Description\r\nThe main purpose of the PR is to add a section that specifies the behavior of the service consummer when the initial registration has been completed. Once registers, the onus is on the consummer to monitor the service availability. \r\n\r\nPR also fixes two typos that were present in the current draft.",
+      "createdAt": "2025-09-03T20:16:17Z",
+      "updatedAt": "2025-09-03T20:16:17Z",
+      "baseRepository": "Abhayakara/draft-tlmk-infra-dnssd",
+      "baseRefName": "main",
+      "baseRefOid": "9c1a61958c90f075f26030217148fbf15667f2a3",
+      "headRepository": "mkardous-silabs/draft-tlmk-infra-dnssd",
+      "headRefName": "feature/availability_monitoring",
+      "headRefOid": "60c7b854541a534e0b6957808e3424f3b519fb7c",
+      "closedAt": null,
+      "mergedAt": null,
+      "mergedBy": null,
+      "mergeCommit": null,
+      "comments": [],
+      "reviews": []
+    }
+  ]
 }
