@@ -64,7 +64,7 @@ In addition, the service must be advertised so that devices that would like to m
 This specification relies on existing technology and makes reference to that technology assuming that the reader is already familiar with it. Readers should familiarize themselves with at least the following documents.
 
 - The DNS specification {{!RFC1035}} which discusses DNS zones
-- The SRP specificaiton {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
+- The SRP specification {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
 - The Advertising Proxy specification {{!draft-ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
 - The Discovery Proxy specification {{!RFC8766}} which describes how to discover mDNS services on a link using DNS queries
 - The DNS Push Specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
@@ -193,6 +193,18 @@ In an unmanaged network, there is no way for the operator to decide which defaul
 
 Practically speaking option 3 is the only easy option, although it places a greater burden on the client. With option 1, the SRP client may take some time to notice that an SRP service has gone away and then reregister, and this is not ideal. Option 2 requires mechanisms that are not yet described in a standard. Consequently, when more than one infrastructure DNSSD service is present, consumers of the DNSSD service that will register their service using SRP MUST register with all infrastructure DNSSD servers.
 
+# Service Availability Monitoring
+
+Once the consumer has registered with the DNSSD service, it is important to monitor the availability of the service.
+
+If the service being used is provided by a router, whether it be a CE router {{!RFC7084}} or a SNAC router {{!draft-ietf-snac-simple}},
+the consumer MUST monitor periodic RAs to ensure the service is still available.
+
+If the service being used is provided by a non-router device that relies on mDNS, the consumer must monitor the service provider to ensure it is still available.
+This can be done by sending periodic queries to the service provider, listening for Time-To-Live updates, etc.
+
+If the consumer detects that the service is no longer available, it must restart the service discovery process defined in this specification.
+
 # Security Considerations
 
 TODO Security
@@ -200,7 +212,7 @@ TODO Security
 
 # IANA Considerations
 
-ALlocate <service-name>, "_dnssd-server" is preferred
+Allocate <service-name>, "_dnssd-server" is preferred
 
 --- back
 
