@@ -49,12 +49,13 @@ DNS Service Discovery provides several mechanisms whereby hosts can discover and
 
 DNS Service Discovery (DNS-SD) {{!RFC6763}} is a general mechanism for advertising and discovering services on IP networks. mDNS is a commonly used transport for DNS-SD. However, it has several shortcomings: it relies entirely on multicast, which works somewhat poorly on WiFi networks. Devices publishing services have to always be available to answer mDNS queries, which can have significant battery impact. When doing service discovery, such devices may do WiFi beacon skipping to save power, and in so doing, miss a large percentage of multicast traffic, making mDNS unreliable.
 
-To address this, this document describes a way of combining several existing technologies to reduce reliance on multicast. This can be done in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{!draft-ietf-snac-simple}}. It can actually be done in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
+To address this, this document describes a way of combining several existing technologies to reduce reliance on multicast. This can be done in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can actually be done in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
 
 There are four logical parts to the service:
+
 - The DNS {{!RFC1035}} zone in which DNSSD information will be stored
 - The SRP {{!RFC9665}} service, which is used to add and update services in the DNS zone
-- The Advertising Proxy {{!draft-ietf-dnssd-advertising-proxy}} service, which advertises the contents of the zone using mDNS on the infrastructure link
+- The Advertising Proxy {{!I-D.ietf-dnssd-advertising-proxy}} service, which advertises the contents of the zone using mDNS on the infrastructure link
 - The Discovery Proxy {{!RFC8766}}, which enables discovery of local services that are advertised using mDNS using the unicast DNS protocol.
 
 In addition, the service must be advertised so that devices that would like to make use of it can discover it.
@@ -65,7 +66,7 @@ This specification relies on existing technology and makes reference to that tec
 
 - The DNS specification {{!RFC1035}} which discusses DNS zones
 - The SRP specification {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
-- The Advertising Proxy specification {{!draft-ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
+- The Advertising Proxy specification {{!I-D.ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
 - The Discovery Proxy specification {{!RFC8766}} which describes how to discover mDNS services on a link using DNS queries
 - The DNS Push Specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
 - The DNS-SD specification {{!RFC6763}} which describes how to discover services using the DNS and mDNS protocols
@@ -99,7 +100,7 @@ infrastructure.<service-name>.dnssd.service.arpa IN SRV <data>
 infrastructure.<service-name>.dnssd.service.arpa IN TXT <data>
 ~~~~
 
-The infrastructure DNSSD service MUST support [draft-ietf-dnssd-multi-qtypes]. Therefore, this query can be done as a single multi-qtype query. Typical DNS servers will, when answering an SRV query, include additional data containing address {{?RFC2782}} pp 4-5. In such situations, if the DNSSD service is provided by infrastructure, all of the information required to discover it will be returned in response to a single query.
+The infrastructure DNSSD service MUST support {{!I-D.ietf-dnssd-multi-qtypes}}. Therefore, this query can be done as a single multi-qtype query. Typical DNS servers will, when answering an SRV query, include additional data containing address {{?RFC2782}} pp 4-5. In such situations, if the DNSSD service is provided by infrastructure, all of the information required to discover it will be returned in response to a single query.
 
 ## Ad-Hoc Service Advertisement
 
@@ -138,7 +139,7 @@ reg-dn='domain': the domain name to use in SRP registrations. If not present, de
 
 domains='domain-list': a comma-separated list of domains in which service discovery is available. If not present, dnssd.service.arpa and local are assumed to be the only domains.
 
-'domain'='ip-subnet-list': a link-specific domain that can be used to query services on that specific IP link. The link is identified by a comma-separated list of IPv4 and/or IPv6 prefixes that are present on that link. See {{interface-domain}}.
+'domain'='ip-subnet-list': a link-specific domain that can be used to query services on that specific IP link. The link is identified by a comma-separated list of IPv4 and/or IPv6 prefixes that are present on that link. See {{interface-domains}}.
 
 priority='priority': a priority for this service. See {{service-priority}}
 
@@ -146,7 +147,7 @@ priority='priority': a priority for this service. See {{service-priority}}
 
 A DNSSD service may support link-specific discovery proxy service. In such cases, each IP link must have its own unique domain, which is specific to the individual DNSSD service. Each such domain must have an name=value entry in the TXT record. This entry has as its name a domain name. Its value is a comma-separated list of IP prefixes that are on-link for the IP link identified by the domain.
 
-IP subnets are in the form <IP address>/<prefix-length>. IP addresses are represented according to the IP address family. IPv4 addresses are in the dotted-decimal format as defined in {{!RFC952}} in the section titled GRAMMATICAL HOST TABLE SPECIFICATION, in subsection A under <address>. IPv6 addresses are represented as described in {{!RFC5952}}.
+IP subnets are in the form `<IP address>/<prefix-length>`. IP addresses are represented according to the IP address family. IPv4 addresses are in the dotted-decimal format as defined in {{!RFC952}} in the section titled GRAMMATICAL HOST TABLE SPECIFICATION, in subsection A under `<address>`. IPv6 addresses are represented as described in {{!RFC5952}}.
 
 As a special (common) case, if the service only provides discovery proxy for a single link, and that is the link on which the DNSSD service is advertised, discovery of services on that link can use the "local" domain. In this case, no domains will be listed in the TXT record; if "local" discovery is to be supported alongside other domains, then the "local" domain must be included in the TXT record. If a service DNSSD service is advertised on more than one link, the local domain is specific to the link for which the destination address for the query is on-link. If the destination address is not on-link for any link, queries in .local are not valid and MUST be responded to with the REFUSED response code.
 
@@ -197,7 +198,7 @@ Practically speaking option 3 is the only easy option, although it places a grea
 
 Once the consumer has registered with the DNSSD service, it is important to monitor the availability of the service.
 
-If the service being used is provided by a router, whether it be a CE router {{!RFC7084}} or a SNAC router {{!draft-ietf-snac-simple}},
+If the service being used is provided by a router, whether it be a CE router {{!RFC7084}} or a SNAC router {{?I-D.ietf-snac-simple}},
 the consumer MUST monitor periodic RAs to ensure the service is still available.
 
 If the service being used is provided by a non-router device that relies on mDNS, the consumer must monitor the service provider to ensure it is still available.
@@ -212,7 +213,7 @@ TODO Security
 
 # IANA Considerations
 
-Allocate <service-name>, "_dnssd-server" is preferred
+Allocate `<service-name>`, "_dnssd-server" is preferred
 
 --- back
 
