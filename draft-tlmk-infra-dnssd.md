@@ -94,7 +94,7 @@ The goal of advertising the service is to provide sufficient information that, h
 
 ## Service Advertisement on Infrastructure
 
-Service advertisement on infrastructure is provided using the 'dnssd.service.arpa.' domain. This is a locally-served domain {{?RFC6303}}. The local DNS resolver on infrastructure MUST answer authoratively for queries in the dnssd.service.arpa zone. Because this is an infrastructure-provided service, infrastructure advertises only one service instance, with the service instance name "infrastructure." Therefore, an infrastructure-provided service advertises the infrastructure service instance in dnssd.service.arpa as follows:
+Service advertisement on infrastructure is provided using the 'dnssd.service.arpa.' domain. This is a locally-served domain {{?RFC6303}}. The local DNS resolver on infrastructure MUST answer authoritatively for queries in the dnssd.service.arpa zone. Because this is an infrastructure-provided service, infrastructure advertises only one service instance, with the service instance name "infrastructure." Therefore, an infrastructure-provided ULD service advertises the infrastructure service instance in dnssd.service.arpa as follows:
 
 ~~~~
 infrastructure.<service-name>.dnssd.service.arpa IN SRV <data>
@@ -179,7 +179,7 @@ A host that wishes to use ULD must first discover the service. Discovery follows
 
 ULD servers that send RAs MUST include a ULDS RA option in RAs that they send when the service is active. Clients can distinguish infrastructure service from ad-hoc service because infrastructure routers have nonzero lifetimes.
 
-It can be the case that there is more than one infrastructure router. In some cases these routers will be part of a managed infrastructure, in which case the service provided by these routers MUST be a common service.
+It can be the case that there is more than one infrastructure router. In some cases these routers will be part of a managed infrastructure, in which case the ULD service provided by these routers MUST be a common service.
 
 # Dual-homed infrastructure ULD service
 
