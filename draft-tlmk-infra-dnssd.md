@@ -42,24 +42,24 @@ informative:
 
 --- abstract
 
-DNS Service Discovery provides several mechanisms whereby hosts can discover and advertise services on an IP network. Such discovery can be done using Multicast DNS (mDNS) or DNS, and advertising can be done with DNSSD Service Registration Protocol (SRP) or mDNS. This document defines Unicast Local Discovery (ULD), a service that combines an SRP registrar, a Discovery Proxy, and an Advertising Proxy to allow hosts to advertise services using SRP and discover services using unicast DNS, in scenarios where mDNS is currently the only option.
+DNS Service Discovery provides several mechanisms whereby hosts can discover and advertise services on an IP network. Such discovery can be done using Multicast DNS (mDNS) or DNS, and advertising can be done with DNSSD Service Registration Protocol (SRP) or mDNS. This document defines Unicast Local Discovery (ULD), a service that combines an SRP registrar, a Discovery Proxy, and an Advertising Proxy. Hosts can use a ULD server to advertise and discover services on the local link entirely via unicast SRP and DNS while remaining interoperable with hosts that use mDNS.
 
 --- middle
 
 # Introduction
 
-DNS Service Discovery (DNS-SD) {{!RFC6763}} is a general mechanism for advertising and discovering services on IP networks. mDNS is a commonly used transport for DNS-SD. However, it has several shortcomings: it relies entirely on multicast, which works somewhat poorly on WiFi networks. Devices publishing services have to always be available to answer mDNS queries, which can have significant battery impact. When doing service discovery, such devices may do WiFi beacon skipping to save power, and in so doing, miss a large percentage of multicast traffic, making mDNS unreliable.
+DNS Service Discovery (DNS-SD) {{!RFC6763}} is a general mechanism for advertising and discovering services on IP networks. While DNS-SD can operate over either unicast DNS or Multicast DNS (mDNS), in practice mDNS is the prevalent method for local service discovery in home networks and other unmanaged environments, because unicast DNS-SD requires infrastructure support (managed DNS zones, service registration mechanisms) that is not typically present on such networks. However, mDNS has several shortcomings: it relies entirely on multicast, which works somewhat poorly on Wi-Fi networks. Devices publishing services have to always be available to answer mDNS queries, which can have significant battery impact. When doing service discovery, such devices may do Wi-Fi beacon skipping to save power, and in so doing, miss a large percentage of multicast traffic, making mDNS unreliable.
 
-To address this, this document defines a way of combining several existing technologies into a Unicast Local Discovery (ULD) service to reduce reliance on multicast. A ULD server can be implemented in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can actually be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
+To address this, this document defines a way of combining several existing technologies into a Unicast Local Discovery (ULD) service to reduce reliance on multicast. There are four logical parts to a ULD server:
 
-There are four logical parts to a ULD server:
-
-- The DNS {{!RFC1035}} zone in which DNSSD information will be stored
+- The DNS {{!RFC1035}} zone in which DNS-SD information will be stored
 - The SRP {{!RFC9665}} service, which is used to add and update services in the DNS zone
 - The Advertising Proxy {{!I-D.ietf-dnssd-advertising-proxy}} service, which advertises the contents of the zone using mDNS on the infrastructure link
 - The Discovery Proxy {{!RFC8766}}, which enables discovery of local services that are advertised using mDNS using the unicast DNS protocol.
 
-In addition, the ULD service must be advertised so that devices that would like to make use of it can discover it.
+While each of these components can be deployed today, only when they are combined into an integrated discoverable service can a client rely entirely on unicast discovery and cease participating in mDNS itself.
+
+A ULD server can be implemented in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can actually be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
 
 ## Previous work
 
@@ -69,7 +69,7 @@ This specification relies on existing technology and makes reference to that tec
 - The SRP specification {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
 - The Advertising Proxy specification {{!I-D.ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
 - The Discovery Proxy specification {{!RFC8766}} which describes how to discover mDNS services on a link using DNS queries
-- The DNS Push Specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
+- The DNS Push Notifications specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
 - The DNS-SD specification {{!RFC6763}} which describes how to discover services using the DNS and mDNS protocols
 
 # Conventions and Definitions
@@ -128,13 +128,13 @@ TXT records are made up of a series of name=value pairs. The following names are
 
 srp-tcp='port': the port number to use for SRP registrations using the DNS Protocol over TCP. If not present, this service is assumed to be available on the port provided in the SRV record.
 
-dns-udp='port': the port number to use for DNSSD queries using the DNS protocol over UDP. If not present, this service is assumed to be available on the port provided in the SRV record.
+dns-udp='port': the port number to use for DNS-SD queries using the DNS protocol over UDP. If not present, this service is assumed to be available on the port provided in the SRV record.
 
-dns-tcp='port': the port number to use for DNSSD queries using the DNS protocol over TCP. If not present, this service is assumed to be available on the port provided in the SRV record.
+dns-tcp='port': the port number to use for DNS-SD queries using the DNS protocol over TCP. If not present, this service is assumed to be available on the port provided in the SRV record.
 
 srp-tls='port': the port number to use for SRP registrations using TLS. If not present, port 853 is assumed.
 
-dns-tls='port': the port number to use for DNSSD queries using the DNS protocol over TLS. If not present, port 853 is assumed.
+dns-tls='port': the port number to use for DNS-SD queries using the DNS protocol over TLS. If not present, port 853 is assumed.
 
 reg-dn='domain': the domain name to use in SRP registrations. If not present, default.service.arpa is assumed.
 
@@ -158,9 +158,9 @@ Infrastructure service is always the highest priority, and there can be only one
 
 Services should choose a priority based on their capabilities. The following priorities are defined:
 
-0: Server is not constrained and is connected to a high-speed wired network link (that is, not WiFi, probably Ethernet or a fiber optic network).
+0: Server is not constrained and is connected to a high-speed wired network link (that is, not Wi-Fi, probably Ethernet or a fiber optic network).
 
-100: Server is not constrained and is connected to a WiFi link
+100: Server is not constrained and is connected to a Wi-Fi link
 
 200: Server is constrained, but otherwise well able to provide service.
 
