@@ -1,7 +1,8 @@
 ---
-title: "Providing DNSSD Service on Infrastructure"
-abbrev: "DNSSD on Infrastructure"
+title: "Providing Local DNS-SD Service on Infrastructure"
+abbrev: "Unicast Local Discovery"
 category: std
+updates: 6762
 
 docname: draft-tlmk-infra-dnssd-latest
 submissiontype: IETF
@@ -30,6 +31,11 @@ author:
     email: mellon@fugue.com
 
  -
+    fullname: Karsten Sperling
+    organization: Apple Inc
+    email: ksperling@apple.com
+
+ -
     fullname: Mathieu Kardous
     organization: Silicon Labs
     email: somebody@example.com
@@ -42,26 +48,23 @@ informative:
 
 --- abstract
 
-DNS Service Discovery provides several mechanisms whereby hosts can discover and advertise services on an IP network. Such discovery can be done using Multicast DNS (mDNS) or DNS, and advertising can be done with DNSSD Service Registration Protocol (SRP) or mDNS. This document defines Unicast Local Discovery (ULD), a service that combines an SRP registrar, a Discovery Proxy, and an Advertising Proxy. Hosts can use a ULD server to advertise and discover services on the local link entirely via unicast SRP and DNS while remaining interoperable with hosts that use mDNS.
+DNS Service Discovery provides several mechanisms whereby hosts can discover and advertise services on an IP network. Such discovery can be done using Multicast DNS (mDNS) or DNS, and advertising can be done with DNS-SD Service Registration Protocol (SRP) or mDNS. This document defines Unicast Local Discovery (ULD), a service that combines an SRP registrar, a Discovery Proxy, and an Advertising Proxy. Hosts can use a ULD server to advertise and discover services on the local link entirely via unicast SRP and DNS while remaining interoperable with hosts that use mDNS.
 
 --- middle
 
 # Introduction
 
-DNS Service Discovery (DNS-SD) {{!RFC6763}} is a general mechanism for advertising and discovering services on IP networks. While DNS-SD can operate over either unicast DNS or Multicast DNS (mDNS), in practice mDNS is the prevalent method for local service discovery in home networks and other unmanaged environments, because unicast DNS-SD requires infrastructure support (managed DNS zones, service registration mechanisms) that is not typically present on such networks. However, mDNS has several shortcomings: it relies entirely on multicast, which works somewhat poorly on Wi-Fi networks. Devices publishing services have to always be available to answer mDNS queries, which can have significant battery impact. When doing service discovery, such devices may do Wi-Fi beacon skipping to save power, and in so doing, miss a large percentage of multicast traffic, making mDNS unreliable.
+DNS Service Discovery (DNS-SD) {{!RFC6763}} is a general mechanism for advertising and discovering services on IP networks. While DNS-SD can operate over either unicast DNS or Multicast DNS (mDNS) {{!RFC6762}}, in practice mDNS is the prevalent method for local service discovery in home networks and other unmanaged environments, because unicast DNS-SD requires infrastructure support (managed DNS zones, service registration mechanisms) that is not typically present on such networks.
 
-To address this, this document defines a way of combining several existing technologies into a Unicast Local Discovery (ULD) service to reduce reliance on multicast. There are four logical parts to a ULD server:
+However, mDNS relies entirely on multicast, and places the responsibility for answering queries on each device that is publishing a service. This interacts poorly with Wi-Fi in several compounding ways: Multicast frames are not acknowledged or retransmitted at the MAC layer, making them inherently less reliable. Unlike unicast frames, they are also not buffered by the access point when a station is sleeping. This creates a problematic tradeoff especially for battery-powered devices: either wake at every DTIM beacon (usually multiple times per second) at a significant power cost, or extend sleep intervals and miss a large proportion of queries, making mDNS unreliable. Finally, multicast frames are transmitted at the lowest mandatory data rate, consuming many times more airtime than equivalent unicast frames. This means that even moderate amounts of mDNS traffic can consume a disproportionate share of available airtime.
 
-- The DNS {{!RFC1035}} zone in which DNS-SD information will be stored
-- The SRP {{!RFC9665}} service, which is used to add and update services in the DNS zone
-- The Advertising Proxy {{!I-D.ietf-dnssd-advertising-proxy}} service, which advertises the contents of the zone using mDNS on the infrastructure link
-- The Discovery Proxy {{!RFC8766}}, which enables discovery of local services that are advertised using mDNS using the unicast DNS protocol.
+To address this, this document defines a way of combining several existing technologies into a Unicast Local Discovery (ULD) service: an SRP registrar {{!RFC9665}} with its Authoritative DNS Server {{!RFC1034}} {{!RFC1035}} to handle registration and discovery over unicast, and an Advertising Proxy {{!I-D.ietf-dnssd-advertising-proxy}} and Discovery Proxy {{!RFC8766}} to provide interoperability with mDNS.
 
-While each of these components can be deployed today, only when they are combined into an integrated discoverable service can a client rely entirely on unicast discovery and cease participating in mDNS itself.
+While each of these components can be deployed today, only when they are integrated in a standardized way into a discoverable service can a client rely entirely on unicast discovery and cease participating in mDNS itself. From a client's perspective, ULD is a drop-in replacement for mDNS: If a ULD server is available on a particular link, the client uses it for all local advertisement and discovery on that link; otherwise it falls back to mDNS.
 
-A ULD server can be implemented in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can actually be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
+A ULD server can be implemented in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
 
-## Previous work
+## Previous Work
 
 This specification relies on existing technology and makes reference to that technology assuming that the reader is already familiar with it. Readers should familiarize themselves with at least the following documents.
 
@@ -76,145 +79,217 @@ This specification relies on existing technology and makes reference to that tec
 
 {::boilerplate bcp14-tagged}
 
+# Design Considerations
 
-# Modes of deployment
+## The Local Zone {#local-zone}
 
-A ULD service can be deployed either as a centralized service provided by infrastructure, or as an ad-hoc service that takes advantage of infrastructure but is not part of infrastructure. An example of the first would be a Customer Edge router (CE Router) {{!RFC7084}}. CE routers are typically autonomously operating devices--although they can be configured by the end user, this is not typical. However, since they are the basis for the network infrastructure of a home network, we think of ULD service provided by a CE router as network infrastructure.
+To make ULD a drop-in replacement for mDNS, a client querying a ULD server must see the same records it would have seen via mDNS, and a device advertising services via the ULD server must be discoverable as if it was advertising those services via mDNS. In other words, the ULD zone must have the same semantics as the ".local." namespace for that link.
 
-An example of a device that could provide ULD service on an ad-hoc basis would be a SNAC router. SNAC routers connect infrastructure networks to stub networks on an ad-hoc basis and provide all four of the services required for ULD to the SNAC network, but only provide Advertising Proxy service to the infrastructure network. This means that devices on infrastructure can discover devices on the stub network, but not to register with SRP service nor use the SNAC Advertising Proxy. A SNAC router that implements the behavior described in this document no longer has this limitation.
+Indeed, when users or applications reference names in .local, their intent is generally semantic: to find or resolve services on the local link, not to trigger the use of the Multicast DNS protocol specifically. Because of this, the intended adoption path for ULD is for resolver libraries to use it transparently as the resolution mechanism for .local when a ULD server is available, requiring no changes to most applications.
 
-# Content of Service Advertisement
+So while a new locally-served special-use domain could be defined for ULD on the wire, this would create two namespaces with identical content and semantics, and would require implementations and libraries to map between them. It would also contradict the insight that .local is about semantics rather than implementation, further discouraging the intended adoption path. Instead, ULD directly uses the .local zone defined by mDNS.
 
-The goal of advertising the service is to provide sufficient information that, having resolved the service advertisement, a user of the service has all the information needed to use the service. This includes at least:
+This document loosens the requirements for .local handling defined in {{!RFC6762}} to allow either ULD or mDNS:
+Any DNS query for a name ending with ".local." MUST be sent to the ULD server for the link,
+or to the mDNS IPv4 link-local multicast address 224.0.0.251 or its IPv6 equivalent FF02::FB.
 
-* Name of the domain to use for service discovery
-* Name of the domain to use for service registration
-* Name of the host providing the service
-* Ports to use for the UDP DNS protocol when communicating with the service
+Note that in mDNS, the separate IPv4 and IPv6 multicast addresses effectively result in two independent .local namespaces — a device must participate in both to be fully discoverable, and clients may see different results depending on which address family they use (see also the "fate sharing" considerations in Section 6.2 of {{!RFC6762}}). Because ULD uses a single authoritative server, this distinction does not arise: A single query over either transport returns the complete set of records for both address families.
 
-## Service Advertisement on Infrastructure
+## Modes of Deployment
 
-Service advertisement on infrastructure is provided using the 'dnssd.service.arpa.' domain. This is a locally-served domain {{?RFC6303}}. The local DNS resolver on infrastructure MUST answer authoritatively for queries in the dnssd.service.arpa zone. Because this is an infrastructure-provided service, infrastructure advertises only one service instance, with the service instance name "infrastructure." Therefore, an infrastructure-provided ULD service advertises the infrastructure service instance in dnssd.service.arpa as follows:
+From the point of view of a ULD client, the simplest deployment would be one where the network's DNS resolver also provides ULD. The client already sends all DNS queries to this resolver, so queries for names in .local could simply be handled alongside all other queries at the same endpoint. Many real-world networks are in fact structured in a way that would support this: In home networks, the CE Router {{!RFC7084}} typically acts as a DNS forwarder, DHCP server, and IPv6 router for the local link. The same architecture extends to many small and medium enterprise networks, where a single site gateway commonly provides these services across multiple network segments (VLANs), making it a natural deployment point for ULD across the entire site.
 
+However, adding ULD support to existing network infrastructure requires firmware updates to devices such as CE routers and site gateways, which may not happen quickly across the installed base. Meanwhile, SNAC routers {{?I-D.ietf-snac-simple}} and similar devices already implement all the components needed for ULD (SRP registrar, Advertising Proxy, Discovery Proxy) and are typically updated more frequently. To enable ULD deployment in the near term, it is therefore important to support a mode of operation where such devices can offer ULD service on an ad-hoc basis.
+
+Supporting ad-hoc ULD servers means that clients must be able to discover and select among them, directing .local queries to the ULD server while sending other DNS queries to the configured resolver. This adds complexity, but also enables deployment in networks where the DNS resolver is an off-link service that cannot provide ULD; a common configuration in more complex enterprise networks.
+
+This leads to two modes of deployment:
+
+Infrastructure mode:
+: The ULD server is a router on the link that has been intentionally deployed as part of the network infrastructure. There SHOULD be at most one infrastructure ULD server per link. An infrastructure ULD server always takes priority over any ad-hoc server.
+
+Ad-hoc mode:
+: The ULD server is a device on the link that is not part of the network infrastructure but has the required capabilities, such as a SNAC router. Multiple ad-hoc servers may be present on the same link; clients select among them based on a priority value advertised with the service.
+
+## Convergence on a Preferred Server {#convergence}
+
+At first glance, multiple ULD servers on a link would seem to provide workable service through their mDNS proxies: Services registered on one server would become visible through others via the Advertising Proxy and Discovery Proxy. However, name conflict resolution breaks down in this configuration. If two clients were to register the same name on different servers, both SRP servers would accept the registration, and the resulting conflict would only manifest at the mDNS layer, where it may persist unresolved or be resolved silently and incorrectly, but in both cases without feedback to either client.
+
+This can be addressed either through server-to-server replication of registrations {{?I-D.ietf-dnssd-srp-replication}}, or by having all clients converge on the same server — that is, all clients independently select the same server using a deterministic priority mechanism. ULD takes the latter approach: since its target deployment state is a stable infrastructure server per link, the added complexity of replication is not warranted.
+
+Convergence also needs to be maintained over time: Ad-hoc servers in particular can appear and disappear at any time, and an infrastructure server may become available after clients have already begun using an ad-hoc server. If discovery were a one-time process, clients performing it at different times could observe different sets of available servers and make different server choices, breaking convergence. Therefore, discovery of ULD servers must be an ongoing process: Clients need to monitor the availability of their chosen server, discover newly available servers, and migrate to a higher-priority server when one appears.
+
+# Unicast Local Discovery
+
+This section describes the logical architecture of a ULD server as it operates on a single link. There are five logical parts to a ULD server:
+
+- The DNS {{!RFC1035}} zone in which DNS-SD information will be stored
+- The SRP {{!RFC9665}} service, which is used to add and update services in the DNS zone
+- The Authoritative DNS Server {{!RFC1035}} which authoritatively answers unicast DNS queries, drawing on both the zone and the Discovery Proxy
+- The Discovery Proxy {{!RFC8766}}, which enables unicast discovery of local services that are advertised via mDNS but have not been registered via SRP
+- The Advertising Proxy {{!I-D.ietf-dnssd-advertising-proxy}} service, which advertises the contents of the zone using mDNS, ensuring SRP-registered services are discoverable via mDNS
+
+~~~~ aasvg
++-----------------------------------+       +----+
+|         Unicast DNS over          |       |    |
+|         UDP, TCP, or TLS          |       |    |
++-----------------------------------+       |    |
+       |              ^                     |    |
+       v              |                     |    |
++-------------+ +-------------------+       |    |
+|     SRP     | |   Authoritative   |       |    |
+|  Registrar  | |      Server       |       |    |
++-------------+ +-------------------+       |mDNS|
+       |            ^   ^                   |    |
+       v           /     \                  |    |
++-------------------+   +-----------+       |    |
+|                   |   | Discovery |<------|    |
+|      .local       |   |   Proxy   |       |    |
+|       zone        |   +-----------+       |    |
+|                   |-->|Advertising|------>|    |
+|                   |   |   Proxy   |       |    |
++-------------------+   +-----------+       +----+
 ~~~~
-infrastructure.<service-name>.dnssd.service.arpa IN SRV <data>
-infrastructure.<service-name>.dnssd.service.arpa IN TXT <data>
-~~~~
+{: #fig-architecture title="ULD Server Architecture"}
 
-The infrastructure service MUST support {{!I-D.ietf-dnssd-multi-qtypes}}. Therefore, this query can be done as a single multi-qtype query. Typical DNS servers will, when answering an SRV query, include additional data containing address {{?RFC2782}} pp 4-5. In such situations, if the service is provided by infrastructure, all of the information required to discover it will be returned in response to a single query.
+A device serving multiple links (e.g. a CE router with multiple VLAN interfaces) conceptually maintains a separate ULD instance per link, each with its own .local zone; the server's link-local address on each interface inherently scopes queries to the correct zone. Selection of the preferred server is also per link: a client operating on multiple links performs discovery separately for each, and may use ULD on some links while falling back to mDNS on others.
 
-## Ad-Hoc Service Advertisement
+## Transports
 
-What we mean by "ad hoc" is something that is not integrated into infrastructure. Ad hoc servers do not have control of the local DNS resolver, and therefore cannot be discovered using DNS, and must instead be discovered using mDNS. Because there is no coordination, it is possible (and in some cases likely) that there will be more than one such server, so the service instance name should be handled normally {{!RFC6763}} section 4.1.1.
+A ULD server MUST support DNS over UDP, DNS over TCP, and DNS over TLS {{!RFC7858}}. DNS over TLS support is required by the SRP specification {{!RFC9665}} and is also the basis for DNS Push Notifications. All services (DNS queries, SRP registration, and DNS Push) operate on the standard ports: port 53 for UDP and TCP, port 853 for TLS. A ULD server MUST support IPv6; dual-stack requirements are addressed in {{dual-stack}}.
 
-Therefore, when advertising with mDNS, the service instance will be advertised as follows:
+On IPv6, clients MUST address ULD traffic to the server's link-local address, and a ULD server MUST refuse requests for ".local." that are not received on a link-local address, responding with RCODE 5 (REFUSED).
 
-~~~~
-<instance-name>.<service-name>.local IN SRV <data>
-<instance-name>.<service-name>.local IN TXT <data>
-~~~~
+ULD clients MAY use TLS, however clients that do support TLS SHOULD NOT fall back to plain TCP or UDP. TLS in ULD provides opportunistic encryption as described in Section 4.1 of {{!RFC7858}}. Servers MUST NOT require client certificates and MAY use self-signed server certificates. Clients SHOULD NOT reject a server's TLS certificate, as server authentication is not a goal in this context.
 
-## Content of SRV record
+## Protocol Operations
 
-mDNS APIs typically do not provide a way of setting the priority and weight of the SRV record, and the infrastructure service always has the highest priority. Therefore, these fields SHOULD be set to zero, and MUST be ignored. The reason they MUST be ignored is that since they SHOULD be zero, and most devices will not be able to set them to any other value, treating them as described in {{!RFC2782}} presents an opportunity for an attack by advertising a service with a weight of 65535.
+### Registering Services
 
-The port field should be set to the UDP port on which SRP service is provided.
+A ULD server MUST accept service registrations via the Service Registration Protocol (SRP) {{!RFC9665}}. Registrations MUST use ".local." as the registration domain, matching the names that would be used if the service were advertised via mDNS. The use of any other registration domain, including default.service.arpa, is out of scope for this specification.
 
-The target is the hostname of the host providing the service.
+Because the .local zone is link-scoped, clients MUST only include address records (A, AAAA) in their SRP registrations that are valid on the link, following the same rules as for mDNS responses in Section 6.2 of {{!RFC6762}}.
 
-## Content of the TXT record
+### Discovering Services
 
-TXT records are made up of a series of name=value pairs. The following names are defined:
+A ULD server MUST answer authoritatively for queries in ".local." and MUST support both standard DNS queries (over UDP, TCP, or TLS) and DNS Push Notifications {{!RFC8765}} (over TLS using DSO {{!RFC8490}}).
 
-srp-tcp='port': the port number to use for SRP registrations using the DNS Protocol over TCP. If not present, this service is assumed to be available on the port provided in the SRV record.
+The server draws on two sources: its authoritative zone (containing SRP-registered services) and the Discovery Proxy (reflecting services advertised via mDNS). Because ULD uses .local for both its zone and mDNS interactions, the Discovery Proxy operates without name rewriting or text-encoding translation — mDNS records are served to unicast clients with names unchanged. This is in contrast to deployments where a Discovery Proxy rewrites names between a delegated subdomain and .local as described in Section 5.5 of {{!RFC8766}}.
 
-dns-udp='port': the port number to use for DNS-SD queries using the DNS protocol over UDP. If not present, this service is assumed to be available on the port provided in the SRV record.
+For browse queries, such as PTR queries for a service type (e.g. "_ipp._tcp.local."), the server MUST return results from both the zone and the Discovery Proxy, since SRP-registered services and services advertised via mDNS may coexist for the same service type. The Discovery Proxy follows the timing rules defined in Section 5.6 of {{!RFC8766}} when responding from its mDNS cache or issuing mDNS queries on the link. Because one-shot browse queries may return incomplete results if the Discovery Proxy's cache is cold, clients SHOULD use DNS Push subscriptions for service browsing to receive complete and ongoing results.
 
-dns-tcp='port': the port number to use for DNS-SD queries using the DNS protocol over TCP. If not present, this service is assumed to be available on the port provided in the SRV record.
+For lookup queries, such as SRV, TXT, or address queries for a particular service instance or hostname, the server MUST prefer zone data. If the zone contains records for the queried name, those records are authoritative and the Discovery Proxy is not consulted. If the zone does not contain records for the queried name, the server queries the Discovery Proxy, which in turn performs mDNS queries on the link.
 
-srp-tls='port': the port number to use for SRP registrations using TLS. If not present, port 853 is assumed.
+Because the Advertising Proxy publishes zone contents via mDNS on the same link that the Discovery Proxy monitors, the server MUST deduplicate results: records that are present in both the zone and the Discovery Proxy's cache (same owner name, type, and rdata) MUST be returned only once.
 
-dns-tls='port': the port number to use for DNS-SD queries using the DNS protocol over TLS. If not present, port 853 is assumed.
+Push subscriptions MUST reflect changes from both the zone and the Discovery Proxy, even when initial results came only from one source.
 
-reg-dn='domain': the domain name to use in SRP registrations. If not present, default.service.arpa is assumed.
+The server SHOULD include additional records as defined in Section 12 of {{!RFC6763}} (e.g., SRV, TXT, and address records alongside PTR answers), except where doing so would cause the response to be excessively large.
 
-domains='domain-list': a comma-separated list of domains in which service discovery is available. If not present, dnssd.service.arpa and local are assumed to be the only domains.
+### Advertising Proxy
 
-'domain'='ip-subnet-list': a link-specific domain that can be used to query services on that specific IP link. The link is identified by a comma-separated list of IPv4 and/or IPv6 prefixes that are present on that link. See {{interface-domains}}.
+A ULD server MUST publish the contents of its ".local." zone into mDNS using an Advertising Proxy, ensuring that services registered via SRP are discoverable via mDNS. As with the Discovery Proxy, the Advertising Proxy in ULD effectively operates without name rewriting: Because the records are already in the .local domain, the rewriting operation mandated by Section 2.1.2 of {{!I-D.ietf-dnssd-advertising-proxy}} is a no-op.
 
-priority='priority': a priority for this service. See {{service-priority}}
+A ULD server MUST implement TSR {{!I-D.ietf-dnssd-tsr}} to correctly resolve conflicts that arise when the same records reach mDNS via different paths, for example when a client transitions from direct mDNS participation to using ULD.
 
-### Interface-specific domains {#interface-domains}
+### Administrative Records
 
-A ULD service may support link-specific Discovery Proxy service. In such cases, each IP link must have its own unique domain, which is specific to the individual service. Each such domain must have an name=value entry in the TXT record. This entry has as its name a domain name. Its value is a comma-separated list of IP prefixes that are on-link for the IP link identified by the domain.
+The ".local." zone MUST contain a number of administrative records. These records have no meaning in the mDNS namespace and MUST NOT be published by the Advertising Proxy.
 
-IP subnets are in the form `<IP address>/<prefix-length>`. IP addresses are represented according to the IP address family. IPv4 addresses are in the dotted-decimal format as defined in {{!RFC952}} in the section titled GRAMMATICAL HOST TABLE SPECIFICATION, in subsection A under `<address>`. IPv6 addresses are represented as described in {{!RFC5952}}.
+As described in Section 6 of {{!RFC8766}}, the zone MUST contain:
 
-As a special (common) case, if the service only provides Discovery Proxy for a single link, and that is the link on which the service is advertised, discovery of services on that link can use the "local" domain. In this case, no domains will be listed in the TXT record; if "local" discovery is to be supported alongside other domains, then the "local" domain must be included in the TXT record. If a service is advertised on more than one link, the local domain is specific to the link for which the destination address for the query is on-link. If the destination address is not on-link for any link, queries in .local are not valid and MUST be responded to with the REFUSED response code.
+- A SOA record for the zone
+- Exactly one NS record for the zone, referencing the ULD server's own hostname in .local
+- AAAA record(s) for that hostname, and A record(s) if applicable
 
-### Service Priority {#service-priority}
+For compatibility with client libraries that perform standard DNS Push or SRP service endpoint discovery, the zone MUST also contain the following SRV records, each pointing to the server's hostname in .local and the relevant well-known port:
 
-Infrastructure service is always the highest priority, and there can be only one such service. When infrastructure service is discovered, this is done using infrastructure. Consequently there is no need to try to discover an ad hoc service, and no need to choose amongst services. The infrastructure service therefore MUST NOT include a priority. Ad-hoc servers SHOULD include a priority. If a priority is not included, the priority of the Ad-Hoc service is assumed to be 65535.
+- `_dns-push-tls._tcp.local.` — port 853 (DNS Push Notifications)
+- `_dnssd-srp-tls._tcp.local.` — port 853 (SRP registration over TLS)
+- `_dnssd-srp._tcp.local.` — port 53 (SRP registration over UDP/TCP)
 
-Services should choose a priority based on their capabilities. The following priorities are defined:
+The ULD server MUST ensure its own hostname is unique on the link. This can be achieved either by using a randomly generated name that is statistically guaranteed to be unique, or by claiming the name via mDNS probing as defined in Section 8 of {{!RFC6762}}. In either case, the server's hostname is owned and defended directly by the server as an mDNS participant, not published on behalf of a client via the Advertising Proxy.
 
-0: Server is not constrained and is connected to a high-speed wired network link (that is, not Wi-Fi, probably Ethernet or a fiber optic network).
+## Server Discovery and Monitoring
 
-100: Server is not constrained and is connected to a Wi-Fi link
+### Server Advertisement {#advertisement}
 
-200: Server is constrained, but otherwise well able to provide service.
+All active ULD servers MUST advertise their presence using mDNS, as a DNS-SD service instance of type `<uld-service-name>._tcp`. The service advertisement consists of:
 
-65535: Server can provide service if needed, but should not be preferred.
+- A PTR record at `<uld-service-name>._tcp.local.` pointing to the service instance name
+- An SRV record for the service instance, pointing to the server's hostname and port 53
+- A TXT record for the service instance, containing a `pri` key indicating the server's priority as defined below
 
-# Discovering the ULD service
+The SRV priority and weight fields SHOULD be set to zero and MUST be ignored by clients. Per Section 5 of {{!RFC6763}}, these fields are used for selecting among multiple SRV records for a single service instance, which does not apply here; additionally, mDNS APIs do not typically expose them to applications.
 
-A host that wishes to use ULD must first discover the service. Discovery follows a series of steps:
+Selection among ULD servers is based on the `pri` TXT key (lower priority values are preferred). If there are multiple servers with the same priority, the one with the numerically lowest IPv6 link-local address MUST be preferred. Services MUST advertise a priority based on their deployment mode and capabilities:
 
-1. Attempt to discover an infrastructure-provided service
-2. Failing that, browse for a list of ad-hoc services.
-3. If one or more ad-hoc services are returned by the browse, choose one using the priority specified in the TXT record.
-4. If no server is discovered, or if no discovered server appears to work, fall back to mDNS-based service discovery
+- 0: Infrastructure server
+- 100: Non-constrained ad-hoc server on a wired network link
+- 200: Non-constrained ad-hoc server on a Wi-Fi link
+- 300: Constrained ad-hoc server, but otherwise well able to provide service
+- 65535: Ad-hoc server that can provide service if needed, but should not be preferred
 
-## Advertising using RAs
+### Infrastructure RA Option 
 
-ULD servers that send RAs MUST include a ULDS RA option in RAs that they send when the service is active. Clients can distinguish infrastructure service from ad-hoc service because infrastructure routers have nonzero lifetimes.
+An infrastructure ULD server MUST additionally advertise its presence by including the ULD RA option in its IPv6 Router Advertisements. The presence of the RA option signals that the sender of the RA is a ULD server, and the server's link-local source address in the RA is the address clients use to reach it.
 
-It can be the case that there is more than one infrastructure router. In some cases these routers will be part of a managed infrastructure, in which case the ULD service provided by these routers MUST be a common service.
+This additional advertisement mechanism serves a dual purpose: It provides IPv6 clients with a faster discovery path that does not rely on mDNS, and it enables the designation of the infrastructure ULD server to be protected by RA Guard {{?RFC6105}}. In order for this protection to be effective, IPv6-capable clients MUST use the RA option for infrastructure server discovery, either exclusively or to verify the infrastructure designation of a server discovered via DNS-SD. The DNS-SD advertisement remains necessary to enable clients already using an ad-hoc server to discover a new infrastructure server via their existing ULD connection (avoiding the need to wake for multicast RA reception), and to support IPv4-only clients.
 
-# Dual-homed infrastructure ULD service
+### Client Behavior
 
-In a dual-homed network, there is more than one default router and potentially more than one ULD server. In the case of managed networks, the network operator MUST ensure that there is a single service, even if it is advertised by more than one default router.
+A client that wishes to use ULD on a particular link must first discover the preferred ULD server. Discovery follows a series of steps:
 
-## Unmanaged networks
+1. Attempt to discover an infrastructure server.
+2. Failing that, browse for a list of ad-hoc servers, and determine the preferred one using the priority specified in the TXT record (see {{advertisement}}). Since all ULD servers MUST support IPv6, an IPv6 client need only query the IPv6 mDNS multicast address (FF02::FB) for this.
+3. If no server is discovered, or if no discovered server appears to work, fall back to mDNS for .local service registration and discovery.
 
-In an unmanaged network, there is no way for the operator to decide which default router will provide the service when more than one default router is able to do so. So we have the following options:
+Once a client has started to use a ULD server, it SHOULD cease its own mDNS participation on that link, and rely on the ULD server for all .local operations. The client MUST also monitor the availability of the service. If the client detects that the service is no longer available, it MUST restart the discovery process.
 
-1. One router defers to the other
-2. The routers share a common DNS zone either using SRP replication or DNS zone transfers with secondary failover
-3. SRP clients are required to register with both services
+The client MUST consider its ULD server unavailable when operations directed at the server persistently fail (DNS queries time out, SRP lease refresh fails, or a DNS Push session is lost). When a client currently using an infrastructure server is awake and processing Router Advertisements, it MUST check for the continued presence of the ULD RA option. However, clients are not required to wake specifically for RA reception.
 
-Practically speaking option 3 is the only easy option, although it places a greater burden on the client. With option 1, the SRP client may take some time to notice that an SRP service has gone away and then reregister, and this is not ideal. Option 2 requires mechanisms that are not yet described in a standard. Consequently, when more than one infrastructure service is present, clients that will register their service using SRP MUST register with all infrastructure ULD servers.
+As motivated in {{convergence}}, clients of an ad-hoc server MUST additionally keep looking for the appearance of a more-preferred server; this could be an infrastructure server or another ad-hoc server that is preferable to the current server according to the rules defined in {{advertisement}}. Clients SHOULD utilize a DNS Push subscription with the current server for this purpose. When a client migrates to a new server (whether due to server failure or the appearance of a more-preferred server), it MUST re-register all its services with the new server.
 
-# Service Availability Monitoring
+## IPv4 and Dual-Stack Operation {#dual-stack}
 
-Once the client has registered with a ULD server, it is important to monitor the availability of the service.
+ULD is designed primarily for IPv6 operation: Infrastructure server discovery uses IPv6 Router Advertisements, and clients connect to the server's IPv6 link-local address, which provides inherent link-scoping. However, dual-stack mDNS interoperability is required to ensure that services on IPv4-only devices remain discoverable through the Discovery Proxy, and services on dual-stack ULD clients can be discovered over IPv4.
 
-If the service is provided by a router, whether it be a CE router {{!RFC7084}} or a SNAC router {{?I-D.ietf-snac-simple}},
-the client MUST monitor periodic RAs to ensure the service is still available.
+A ULD server MUST therefore participate in mDNS on both the IPv6 multicast address (FF02::FB) and the IPv4 multicast address (224.0.0.251), unless deployed in an IPv6-only environment. The server SHOULD also accept ULD client connections over IPv4.
 
-If the service is provided by a non-router device that relies on mDNS, the client must monitor the service provider to ensure it is still available.
-This can be done by sending periodic queries to the service provider, listening for Time-To-Live updates, etc.
+Clients MAY connect to the ULD server over IPv4 using an on-link address. When a server receives ULD traffic over IPv4, it MUST verify that the source address falls within a directly-connected subnet of the receiving interface before processing a ".local." request. Even when connecting over IPv4, clients MUST use the server's IPv6 link-local address for the tiebreaker comparison defined in {{advertisement}}; this ensures all clients converge on the same server regardless of transport. If the preferred server is not reachable over IPv4, an IPv4-only client MUST fall back to mDNS. As the RA-based discovery mechanism is IPv6-only, an IPv4-only client discovers all servers, including the infrastructure server, via mDNS.
 
-If the client detects that the service is no longer available, it must restart the service discovery process defined in this specification.
+As noted in {{local-zone}}, because ULD uses a single authoritative server, a query over either transport returns records for both address families. This eliminates the need for clients to issue parallel queries on IPv4 and IPv6, as would be necessary with mDNS.
+
+# Operational Considerations
+
+The ideal deployment state for ULD is a single infrastructure server on each link, providing streamlined discovery for all clients.
+
+A device that implements ULD MAY provide ULD service by default. Unless it qualifies as an infrastructure server (see below), it MUST advertise as an ad-hoc server with a priority reflecting its capabilities.
+
+In managed networks, the infrastructure ULD server designation MUST be enabled via explicit configuration by the network operator. Where multiple managed routers are present on a link, the operator MUST ensure that at most one advertises the ULD RA option.
+
+In unmanaged networks such as home networks, CE routers {{!RFC7084}} are typically autonomously operating devices that form the basis for the network infrastructure. A CE router that provides ULD SHOULD claim infrastructure status by default, since it is already the de facto infrastructure for the link. Indications that a device is serving in this role include being the default router (sending RAs with nonzero Router Lifetime) and providing services such as DHCPv4 that are inherently singleton on the link. A device that is not clearly the primary gateway for the link MUST NOT claim infrastructure status without explicit configuration.
+
+Note that Homenet {{?RFC7788}} does not define a "primary router" designation — it uses a distributed model with no single designated device. ULD's "one infrastructure server" assumption does not align well with this architecture. In Homenet networks, ULD servers may need to operate in ad-hoc mode, or Homenet could be extended to elect a ULD infrastructure server.
+
+# SNAC Router Considerations
+
+TODO: The AdProxy and DiscProxy components of the SNAC router could use ULD, and the device itself can host a ULD server.
 
 # Security Considerations
 
-TODO Security
+TODO
 
+# Domain Name Reservation Considerations
+
+The considerations set out in {{!RFC6762}} for handling of names within the ".local." domain continue to apply.
+Name resolution APIs and libraries SHOULD continue to recognize .local names as special
+and SHOULD NOT send queries for these names to their configured (unicast) caching DNS server,
+unless that server is also the ULD server for the link in question.
 
 # IANA Considerations
 
-Allocate `<service-name>`, "_dnssd-server" is preferred
+Allocate `<uld-service-name>`, "_uld" is preferred
 
 --- back
 
