@@ -62,66 +62,27 @@ To address this, this document defines a way of combining several existing techn
 
 While each of these components can be deployed today, only when they are integrated in a standardized way into a discoverable service can a client rely entirely on unicast discovery and cease participating in mDNS itself. From a client's perspective, ULD is a drop-in replacement for mDNS: If a ULD server is available on a particular link, the client uses it for all local advertisement and discovery on that link; otherwise it falls back to mDNS.
 
-A ULD server can be implemented in, for example, a CE router {{!RFC7084}}, or a SNAC Router {{?I-D.ietf-snac-simple}}. It can be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
+A ULD server can be deployed as part of the network infrastructure, for example on a CE router {{!RFC7084}}, or on an ad-hoc basis on devices such as SNAC Routers {{?I-D.ietf-snac-simple}} that already have the required capabilities. It can be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
 
-## Previous Work
-
-This specification relies on existing technology and makes reference to that technology assuming that the reader is already familiar with it. Readers should familiarize themselves with at least the following documents.
-
-- The DNS specification {{!RFC1035}} which discusses DNS zones
-- The SRP specification {{!RFC9665}} which explains how to register services in the DNS without a pre-shared key
-- The Advertising Proxy specification {{!I-D.ietf-dnssd-advertising-proxy}} which explains how to advertise the contents of a DNS zone using mDNS
-- The Discovery Proxy specification {{!RFC8766}} which describes how to discover mDNS services on a link using DNS queries
-- The DNS Push Notifications specification {{!RFC8765}} which describes how to efficiently do long-lived DNS queries
-- The DNS-SD specification {{!RFC6763}} which describes how to discover services using the DNS and mDNS protocols
-
-# Conventions and Definitions
+# Conventions and Terminology {#terminology}
 
 {::boilerplate bcp14-tagged}
 
-# Design Considerations
+This document uses the terms "infrastructure" and "ad-hoc" to refer to the two different ways a ULD server can be deployed:
 
-## The Local Zone {#local-zone}
+Infrastructure server:
+: The ULD server is a router on the link that has been intentionally deployed as part of the network infrastructure. At most one infrastructure server is expected per link.
 
-To make ULD a drop-in replacement for mDNS, a client querying a ULD server must see the same records it would have seen via mDNS, and a device advertising services via the ULD server must be discoverable as if it was advertising those services via mDNS. In other words, the ULD zone must have the same semantics as the ".local." namespace for that link.
-
-Indeed, when users or applications reference names in .local, their intent is generally semantic: to find or resolve services on the local link, not to trigger the use of the Multicast DNS protocol specifically. Because of this, the intended adoption path for ULD is for resolver libraries to use it transparently as the resolution mechanism for .local when a ULD server is available, requiring no changes to most applications.
-
-So while a new locally-served special-use domain could be defined for ULD on the wire, this would create two namespaces with identical content and semantics, and would require implementations and libraries to map between them. It would also contradict the insight that .local is about semantics rather than implementation, further discouraging the intended adoption path. Instead, ULD directly uses the .local zone defined by mDNS.
-
-This document loosens the requirements for .local handling defined in {{!RFC6762}} to allow either ULD or mDNS:
-Any DNS query for a name ending with ".local." MUST be sent to the ULD server for the link,
-or to the mDNS IPv4 link-local multicast address 224.0.0.251 or its IPv6 equivalent FF02::FB.
-
-Note that in mDNS, the separate IPv4 and IPv6 multicast addresses effectively result in two independent .local namespaces — a device must participate in both to be fully discoverable, and clients may see different results depending on which address family they use (see also the "fate sharing" considerations in Section 6.2 of {{!RFC6762}}). Because ULD uses a single authoritative server, this distinction does not arise: A single query over either transport returns the complete set of records for both address families.
-
-## Modes of Deployment
-
-From the point of view of a ULD client, the simplest deployment would be one where the network's DNS resolver also provides ULD. The client already sends all DNS queries to this resolver, so queries for names in .local could simply be handled alongside all other queries at the same endpoint. Many real-world networks are in fact structured in a way that would support this: In home networks, the CE Router {{!RFC7084}} typically acts as a DNS forwarder, DHCP server, and IPv6 router for the local link. The same architecture extends to many small and medium enterprise networks, where a single site gateway commonly provides these services across multiple network segments (VLANs), making it a natural deployment point for ULD across the entire site.
-
-However, adding ULD support to existing network infrastructure requires firmware updates to devices such as CE routers and site gateways, which may not happen quickly across the installed base. Meanwhile, SNAC routers {{?I-D.ietf-snac-simple}} and similar devices already implement all the components needed for ULD (SRP registrar, Advertising Proxy, Discovery Proxy) and are typically updated more frequently. To enable ULD deployment in the near term, it is therefore important to support a mode of operation where such devices can offer ULD service on an ad-hoc basis.
-
-Supporting ad-hoc ULD servers means that clients must be able to discover and select among them, directing .local queries to the ULD server while sending other DNS queries to the configured resolver. This adds complexity, but also enables deployment in networks where the DNS resolver is an off-link service that cannot provide ULD; a common configuration in more complex enterprise networks.
-
-This leads to two modes of deployment:
-
-Infrastructure mode:
-: The ULD server is a router on the link that has been intentionally deployed as part of the network infrastructure. There SHOULD be at most one infrastructure ULD server per link. An infrastructure ULD server always takes priority over any ad-hoc server.
-
-Ad-hoc mode:
-: The ULD server is a device on the link that is not part of the network infrastructure but has the required capabilities, such as a SNAC router. Multiple ad-hoc servers may be present on the same link; clients select among them based on a priority value advertised with the service.
-
-## Convergence on a Preferred Server {#convergence}
-
-At first glance, multiple ULD servers on a link would seem to provide workable service through their mDNS proxies: Services registered on one server would become visible through others via the Advertising Proxy and Discovery Proxy. However, name conflict resolution breaks down in this configuration. If two clients were to register the same name on different servers, both SRP servers would accept the registration, and the resulting conflict would only manifest at the mDNS layer, where it may persist unresolved or be resolved silently and incorrectly, but in both cases without feedback to either client.
-
-This can be addressed either through server-to-server replication of registrations {{?I-D.ietf-dnssd-srp-replication}}, or by having all clients converge on the same server — that is, all clients independently select the same server using a deterministic priority mechanism. ULD takes the latter approach: since its target deployment state is a stable infrastructure server per link, the added complexity of replication is not warranted.
-
-Convergence also needs to be maintained over time: Ad-hoc servers in particular can appear and disappear at any time, and an infrastructure server may become available after clients have already begun using an ad-hoc server. If discovery were a one-time process, clients performing it at different times could observe different sets of available servers and make different server choices, breaking convergence. Therefore, discovery of ULD servers must be an ongoing process: Clients need to monitor the availability of their chosen server, discover newly available servers, and migrate to a higher-priority server when one appears.
+Ad-hoc server:
+: The ULD server is a device on the link that is not part of the network infrastructure but has the required capabilities, such as a SNAC router. Multiple ad-hoc servers may be present on the same link.
 
 # Unicast Local Discovery
 
-This section describes the logical architecture of a ULD server as it operates on a single link. There are five logical parts to a ULD server:
+ULD provides service registration and discovery within the ".local." domain, the same domain used by mDNS {{!RFC6762}}. This ensures that ULD is a transparent replacement for mDNS from the perspective of applications and resolver libraries (see {{local-zone}} for further discussion of this design choice). Unlike mDNS, where the separate IPv4 and IPv6 multicast addresses effectively result in two independent .local namespaces (Section 20 of {{!RFC6762}}), ULD maintains a single unified .local zone per link.
+
+This document updates {{!RFC6762}} to allow .local queries to be directed to a ULD server as an alternative to mDNS multicast: Any DNS query for a name ending with ".local." MUST be sent to the ULD server for the link, or to the mDNS IPv4 link-local multicast address 224.0.0.251 or its IPv6 equivalent FF02::FB.
+
+The following sections describe the architecture and operation of a ULD server on a single link. There are five logical parts to a ULD server:
 
 - The DNS {{!RFC1035}} zone in which DNS-SD information will be stored
 - The SRP {{!RFC9665}} service, which is used to add and update services in the DNS zone
@@ -258,8 +219,6 @@ A ULD server MUST therefore participate in mDNS on both the IPv6 multicast addre
 
 Clients MAY connect to the ULD server over IPv4 using an on-link address. When a server receives ULD traffic over IPv4, it MUST verify that the source address falls within a directly-connected subnet of the receiving interface before processing a ".local." request. Even when connecting over IPv4, clients MUST use the server's IPv6 link-local address for the tiebreaker comparison defined in {{advertisement}}; this ensures all clients converge on the same server regardless of transport. If the preferred server is not reachable over IPv4, an IPv4-only client MUST fall back to mDNS. As the RA-based discovery mechanism is IPv6-only, an IPv4-only client discovers all servers, including the infrastructure server, via mDNS.
 
-As noted in {{local-zone}}, because ULD uses a single authoritative server, a query over either transport returns records for both address families. This eliminates the need for clients to issue parallel queries on IPv4 and IPv6, as would be necessary with mDNS.
-
 # Operational Considerations
 
 The ideal deployment state for ULD is a single infrastructure server on each link, providing streamlined discovery for all clients.
@@ -292,6 +251,30 @@ unless that server is also the ULD server for the link in question.
 Allocate `<uld-service-name>`, "_uld" is preferred
 
 --- back
+
+# Choice of Local Domain {#local-zone}
+
+To make ULD a drop-in replacement for mDNS, a client querying a ULD server must see the same records it would have seen via mDNS, and a device advertising services via the ULD server must be discoverable as if it was advertising those services via mDNS. In other words, the ULD zone must have the same semantics as the ".local." namespace for that link.
+
+Indeed, when users or applications reference names in .local, their intent is generally semantic: to find or resolve services on the local link, not to trigger the use of the Multicast DNS protocol specifically. Because of this, the intended adoption path for ULD is for resolver libraries to use it transparently as the resolution mechanism for .local when a ULD server is available, requiring no changes to most applications.
+
+So while a new locally-served special-use domain could be defined for ULD on the wire, this would create two namespaces with identical content and semantics, and would require implementations and libraries to map between them. It would also contradict the insight that .local is about semantics rather than implementation, further discouraging the intended adoption path. Instead, ULD directly uses the .local zone defined by mDNS.
+
+# Rationale for Supporting Ad-Hoc Servers {#why-ad-hoc}
+
+From the point of view of a ULD client, the simplest deployment would be one where the network's DNS resolver also provides ULD. The client already sends all DNS queries to this resolver, so queries for names in .local could simply be handled alongside all other queries at the same endpoint. Many real-world networks are in fact structured in a way that would support this: In home networks, the CE Router {{!RFC7084}} typically acts as a DNS forwarder, DHCP server, and IPv6 router for the local link. The same architecture extends to many small and medium enterprise networks, where a single site gateway commonly provides these services across multiple network segments (VLANs), making it a natural deployment point for ULD across the entire site.
+
+However, adding ULD support to existing network infrastructure requires firmware updates to devices such as CE routers and site gateways, which may not happen quickly across the installed base. Meanwhile, SNAC routers {{?I-D.ietf-snac-simple}} and similar devices already implement all the components needed for ULD (SRP registrar, Advertising Proxy, Discovery Proxy) and are typically updated more frequently. To enable ULD deployment in the near term, it is therefore important to support a mode of operation where such devices can offer ULD service on an ad-hoc basis.
+
+Supporting ad-hoc ULD servers means that clients must be able to discover and select among them, directing .local queries to the ULD server while sending other DNS queries to the configured resolver. This adds complexity, but also enables deployment in networks where the DNS resolver is an off-link service that cannot provide ULD; this is a common configuration in more complex enterprise networks.
+
+# Convergence on a Preferred Server {#convergence}
+
+At first glance, multiple ULD servers on a link would seem to provide workable service through their mDNS proxies: Services registered on one server would become visible through others via the Advertising Proxy and Discovery Proxy. However, name conflict resolution breaks down in this configuration. If two clients were to register the same name on different servers, both SRP servers would accept the registration, and the resulting conflict would only manifest at the mDNS layer, where it may persist unresolved or be resolved silently and incorrectly, but in both cases without feedback to either client.
+
+This can be addressed either through server-to-server replication of registrations {{?I-D.ietf-dnssd-srp-replication}}, or by having all clients converge on the same server — that is, all clients independently select the same server using a deterministic priority mechanism. ULD takes the latter approach: since its target deployment state is a stable infrastructure server per link, the added complexity of replication is not warranted.
+
+Convergence also needs to be maintained over time: Ad-hoc servers in particular can appear and disappear at any time, and an infrastructure server may become available after clients have already begun using an ad-hoc server. If discovery were a one-time process, clients performing it at different times could observe different sets of available servers and make different server choices, breaking convergence. Therefore, discovery of ULD servers must be an ongoing process: Clients need to monitor the availability of their chosen server, discover newly available servers, and migrate to a higher-priority server when one appears.
 
 # Acknowledgments
 {:numbered="false"}
