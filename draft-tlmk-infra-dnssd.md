@@ -64,7 +64,7 @@ While each of these components can be deployed today, only when they are integra
 
 A ULD server can be deployed as part of the network infrastructure, for example on a CE router {{!RFC7084}}, or on an ad-hoc basis on devices such as SNAC Routers {{?I-D.ietf-snac-simple}} that already have the required capabilities. It can be implemented in any device that is expected to be continuously operational on a network link and has sufficient resources to provide the service.
 
-# Conventions and Terminology {#terminology}
+# Conventions and Terminology
 
 {::boilerplate bcp14-tagged}
 
@@ -75,6 +75,8 @@ Infrastructure server:
 
 Ad-hoc server:
 : The ULD server is a device on the link that is not part of the network infrastructure but has the required capabilities, such as a SNAC router. Multiple ad-hoc servers may be present on the same link.
+
+This document uses the terms "shared" and "unique" when referring to resource record sets in the sense of Section 2 of {{!RFC6762}}: A unique record set is conceptually under the sole control of a single owning device, whereas a shared record set may contain records contributed by multiple devices.
 
 # Unicast Local Discovery
 
@@ -137,13 +139,11 @@ A ULD server MUST answer authoritatively for queries in ".local." and MUST suppo
 
 The server draws on two sources: its authoritative zone (containing SRP-registered services) and the Discovery Proxy (reflecting services advertised via mDNS). Because ULD uses .local for both its zone and mDNS interactions, the Discovery Proxy operates without name rewriting or text-encoding translation — mDNS records are served to unicast clients with names unchanged. This is in contrast to deployments where a Discovery Proxy rewrites names between a delegated subdomain and .local as described in Section 5.5 of {{!RFC8766}}.
 
-For browse queries, such as PTR queries for a service type (e.g. "_ipp._tcp.local."), the server MUST return results from both the zone and the Discovery Proxy, since SRP-registered services and services advertised via mDNS may coexist for the same service type. The Discovery Proxy follows the timing rules defined in Section 5.6 of {{!RFC8766}} when responding from its mDNS cache or issuing mDNS queries on the link. Because one-shot browse queries may return incomplete results if the Discovery Proxy's cache is cold, clients SHOULD use DNS Push subscriptions for service browsing to receive complete and ongoing results.
+Since records matching a query could be shared, by default the server MUST answer from the union of both sources: for a given query it returns the matching records from the zone together with the matching records from the Discovery Proxy; a DNS Push subscription MUST likewise reflect changes from both sources, even when initial results came from only one.
 
-For lookup queries, such as SRV, TXT, or address queries for a particular service instance or hostname, the server MUST prefer zone data. If the zone contains records for the queried name, those records are authoritative and the Discovery Proxy is not consulted. If the zone does not contain records for the queried name, the server queries the Discovery Proxy, which in turn performs mDNS queries on the link.
+As an important optimization, when the query matches a unique record set in the .local zone, the server SHOULD treat the zone data as complete and not consult the Discovery Proxy. A record set registered via SRP is considered unique if it was part of a Host Description or Service Description Instruction (Section 3.3.1 of {{!RFC9665}}). Because unique records have a single owner, the zone can be assumed to hold the entire set.
 
-Because the Advertising Proxy publishes zone contents via mDNS on the same link that the Discovery Proxy monitors, the server MUST deduplicate results: records that are present in both the zone and the Discovery Proxy's cache (same owner name, type, and rdata) MUST be returned only once.
-
-Push subscriptions MUST reflect changes from both the zone and the Discovery Proxy, even when initial results came only from one source.
+Because the Advertising Proxy publishes zone contents via mDNS on the same link that the Discovery Proxy monitors, it is conceivable for the server to see records from its own .local zone reflected back via the Discovery Proxy; the server MUST ensure that such duplicate records are not returned to clients.
 
 The server SHOULD include additional records as defined in Section 12 of {{!RFC6763}} (e.g., SRV, TXT, and address records alongside PTR answers), except where doing so would cause the response to be excessively large.
 
