@@ -189,15 +189,15 @@ All active ULD servers MUST advertise their presence using mDNS, as a DNS-SD ser
 
 The SRV priority and weight fields SHOULD be set to zero and MUST be ignored by clients. Per Section 5 of {{!RFC6763}}, these fields are used for selecting among multiple SRV records for a single service instance, which does not apply here; additionally, mDNS APIs do not typically expose them to applications.
 
-Selection among ULD servers is based on the `pri` TXT key (lower priority values are preferred). If there are multiple servers with the same priority, the one with the numerically lowest IPv6 link-local address MUST be preferred. Services MUST advertise a priority based on their deployment mode and capabilities:
+Selection among ULD servers is based on the numeric value of the `pri` TXT key (lower priority values are preferred). If there are multiple servers with the same priority, the one with the numerically lowest IPv6 link-local address MUST be preferred. Services MUST advertise a priority based on their deployment mode and capabilities:
 
 - 0: Infrastructure server
 - 100: Non-constrained ad-hoc server on a wired network link
 - 200: Non-constrained ad-hoc server on a Wi-Fi link
-- 300: Constrained ad-hoc server, but otherwise well able to provide service
+- 1000: Constrained ad-hoc server, but otherwise well able to provide service
 - 65535: Ad-hoc server that can provide service if needed, but should not be preferred
 
-### Infrastructure RA Option 
+### Infrastructure RA Option
 
 An infrastructure ULD server MUST additionally advertise its presence by including the ULD RA option in its IPv6 Router Advertisements. The presence of the RA option signals that the sender of the RA is a ULD server, and the server's link-local source address in the RA is the address clients use to reach it.
 
