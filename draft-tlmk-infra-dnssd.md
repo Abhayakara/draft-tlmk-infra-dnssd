@@ -35,12 +35,6 @@ author:
     organization: Apple Inc
     email: ksperling@apple.com
 
- -
-    fullname: Mathieu Kardous
-    organization: Silicon Labs
-    email: somebody@example.com
-
-
 normative:
 informative:
 
